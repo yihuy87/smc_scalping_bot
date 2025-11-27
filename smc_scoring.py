@@ -1,45 +1,59 @@
 # smc_scoring.py
 # =========================
-# SMC AGGRESSIVE SCALPING SCORING
+# SMC AGGRESSIVE SCALPING SCORING (PREMIUM)
 # =========================
 
 def score_smc_signal(c: dict) -> int:
     """
-    Scoring sederhana untuk setup Aggressive Scalping (0–100).
+    Scoring untuk setup Aggressive Scalping (0–125).
+    A+ di-design lebih jarang.
     """
     score = 0
 
+    # Bias 5m
     if c.get("bias_ok"):
-        score += 25   # trend 5m searah
+        score += 20
 
+    # Micro CHoCH
     if c.get("micro_choch"):
-        score += 35   # trigger utama
+        score += 25
+    if c.get("micro_choch_premium"):
+        score += 10  # impulse candle bersih
 
+    # Micro FVG
     if c.get("micro_fvg"):
-        score += 15   # confluence imbalance
+        score += 15
 
+    # Momentum
     if c.get("momentum_ok"):
-        score += 15   # tenaga harga
+        score += 20
+    if c.get("momentum_premium"):
+        score += 10  # sweet spot, tidak terlalu lemah/kuat
 
+    # Market quality
     if c.get("not_choppy"):
-        score += 10   # market tidak terlalu noisy
+        score += 15
+
+    # Synergy bonus: bias + trigger + momentum
+    if c.get("bias_ok") and c.get("micro_choch") and c.get("momentum_ok"):
+        score += 10
 
     return score
 
 
 def tier_from_score(score: int) -> str:
     """
-    Mapping score → Tier untuk Aggressive Scalping:
-    - A+ : >= 85
-    - A  : 70–84
-    - B  : 55–69
-    - NONE : < 55
+    Tier lebih ketat:
+    - A+ : >= 110
+    - A  : 90–109
+    - B  : 70–89
+    - NONE : < 70
     """
-    if score >= 85:
+    if score >= 110:
         return "A+"
-    elif score >= 70:
+    elif score >= 90:
         return "A"
-    elif score >= 55:
+    elif score >= 70:
         return "B"
     else:
         return "NONE"
@@ -47,7 +61,6 @@ def tier_from_score(score: int) -> str:
 
 def should_send_tier(tier: str, min_tier: str) -> bool:
     """
-    Bandingkan tier terhadap min_tier:
     Urutan: NONE < B < A < A+
     """
     order = {"NONE": 0, "B": 1, "A": 2, "A+": 3}

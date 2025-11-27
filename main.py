@@ -372,36 +372,47 @@ def build_signal_message(
     side_label = "LONG" if side == "long" else "SHORT"
 
     # Aggressive scalping conditions
-    bias_ok = conditions.get("bias_ok")
-    choch_ok = conditions.get("micro_choch")
-    fvg_ok = conditions.get("micro_fvg")
-    momentum_ok = conditions.get("momentum_ok")
-    not_choppy = conditions.get("not_choppy")
+    bias_ok             = conditions.get("bias_ok")
+    micro_choch         = conditions.get("micro_choch")
+    micro_choch_premium = conditions.get("micro_choch_premium")
+    micro_fvg           = conditions.get("micro_fvg")
+    momentum_ok         = conditions.get("momentum_ok")
+    momentum_premium    = conditions.get("momentum_premium")
+    not_choppy          = conditions.get("not_choppy")
 
     text = f"""🟦 SMC AGGRESSIVE SCALPING — {symbol}
 
-Score: {score}/100 — Tier {tier} — {side_label}
+Score: {score}/120 — Tier {tier} — {side_label}
 
 💰 Harga
-• Entry : {entry:.6f}
-• SL    : {sl:.6f}
-• TP1   : {tp1:.6f}
-• TP2   : {tp2:.6f}
-• TP3   : {tp3:.6f}
+
+• Entry : `{entry:.6f}`
+
+• SL    : `{sl:.6f}`
+
+• TP1   : `{tp1:.6f}`
+
+• TP2   : `{tp2:.6f}`
+
+• TP3   : `{tp3:.6f}`
 
 📌 Checklist Aggressive Scalping
-• Bias 5m (EMA20 > EMA50) : {mark(bias_ok)}
-• Micro CHoCH (break lokal): {mark(choch_ok)}
-• Micro FVG (imbalance)    : {mark(fvg_ok)}
-• Momentum OK (RSI 45–75)  : {mark(momentum_ok)}
-• Market tidak choppy      : {mark(not_choppy)}
+
+• Bias 5m (EMA20 > EMA50)      : {mark(bias_ok)}
+• Micro CHoCH (trigger)        : {mark(micro_choch)}
+• Micro CHoCH premium candle   : {mark(micro_choch_premium)}
+• Micro FVG (imbalance)        : {mark(micro_fvg)}
+• Momentum OK (RSI 45–75)      : {mark(momentum_ok)}
+• Momentum premium (RSI 50–68) : {mark(momentum_premium)}
+• Market tidak choppy          : {mark(not_choppy)}
 
 📝 Catatan
+
 Strategi ini fokus pada:
 • Trend mikro 5m yang jelas
 • Pullback singkat lalu impuls lanjutan
 • Entry cepat, SL relatif kecil, TP cepat
-• Frekuensi sinyal lebih sering dibanding mode IPC.
+• Tier A+ diset lebih ketat, hanya muncul saat confluence sangat kuat.
 
 Free: maksimal 2 sinyal/hari. VIP: Unlimited sinyal.
 """
