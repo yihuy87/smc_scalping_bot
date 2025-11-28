@@ -382,7 +382,7 @@ def build_signal_message(
 
     text = f"""🟦 SMC AGGRESSIVE SCALPING — {symbol}
 
-Score: {score}/120 — Tier {tier} — {side_label}
+Score: {score}/125 — Tier {tier} — {side_label}
 
 💰 Harga
 
