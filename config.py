@@ -12,8 +12,8 @@ TELEGRAM_ADMIN_ID = os.getenv("TELEGRAM_ADMIN_ID", "")
 TELEGRAM_ADMIN_USERNAME = os.getenv("TELEGRAM_ADMIN_USERNAME", "")
 
 # === BINANCE ===
-BINANCE_REST_URL = "https://api.binance.com"
-BINANCE_STREAM_URL = "wss://stream.binance.com:9443/stream"
+BINANCE_REST_URL = "https://fapi.binance.com"
+BINANCE_STREAM_URL = "wss://fstream.binance.com/stream"
 
 # Filtering volume minimum (dalam USDT)
 MIN_VOLUME_USDT = 1_000_000.0
