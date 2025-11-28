@@ -26,7 +26,7 @@ from config import (
 )
 
 from smc_logic import analyse_symbol
-from smc_scoring import score_smc_signal, tier_from_score, should_send_tier
+from smc_scoring import evaluate_smc_signal
 
 # ===== FILE DATA PERSISTENT =====
 SUBSCRIBERS_FILE = "subscribers.json"
@@ -56,6 +56,10 @@ class BotState:
     # restart & pairs filter
     request_soft_restart: bool = False
     force_pairs_refresh: bool = False
+
+    # parameter scan market yang bisa diatur admin
+    min_volume_usdt: float = MIN_VOLUME_USDT   # filter volume minimum
+    max_pairs: int = MAX_USDT_PAIRS            # jumlah pair yang discan
 
 
 state = BotState()
@@ -138,9 +142,15 @@ def load_bot_state():
         state.scanning = bool(data.get("scanning", False))
         state.min_tier = data.get("min_tier", state.min_tier)
         state.cooldown_seconds = int(data.get("cooldown_seconds", state.cooldown_seconds))
+
+        # NEW: load min_volume_usdt & max_pairs
+        state.min_volume_usdt = float(data.get("min_volume_usdt", state.min_volume_usdt))
+        state.max_pairs = int(data.get("max_pairs", state.max_pairs))
+
         print(
             f"Bot state loaded: scanning={state.scanning}, "
-            f"min_tier={state.min_tier}, cooldown={state.cooldown_seconds}"
+            f"min_tier={state.min_tier}, cooldown={state.cooldown_seconds}, "
+            f"min_volume_usdt={state.min_volume_usdt}, max_pairs={state.max_pairs}"
         )
     except Exception as e:
         print("Gagal load bot_state:", e)
@@ -153,6 +163,8 @@ def save_bot_state():
             "scanning": state.scanning,
             "min_tier": state.min_tier,
             "cooldown_seconds": state.cooldown_seconds,
+            "min_volume_usdt": state.min_volume_usdt,
+            "max_pairs": state.max_pairs,
         }
         with open(STATE_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f)
@@ -239,6 +251,10 @@ def get_admin_reply_keyboard() -> dict:
             ],
             [
                 {"text": "⏲️ Cooldown"},
+                {"text": "📈 Min Volume"},
+                {"text": "📌 Max Pair"},
+            ],
+            [
                 {"text": "⭐ VIP Control"},
                 {"text": "🔄 Restart Bot"},
             ],
@@ -299,10 +315,10 @@ def broadcast_signal(text: str):
 
 # ================== BINANCE PAIRS ==================
 
-def get_usdt_pairs(max_pairs: int) -> List[str]:
+def get_usdt_pairs(max_pairs: int, min_volume_usdt: float) -> List[str]:
     """
     Ambil semua pair USDT yang statusnya TRADING,
-    lalu filter hanya yang 24h quote volume >= MIN_VOLUME_USDT USDT.
+    lalu filter hanya yang 24h quote volume >= min_volume_usdt USDT.
     """
     # 1) Ambil info symbol (base/quote + status)
     info_url = f"{BINANCE_REST_URL}/api/v3/exchangeInfo"
@@ -333,7 +349,7 @@ def get_usdt_pairs(max_pairs: int) -> List[str]:
             vol_map[sym] = qv
 
     # 3) Filter volume >= dalam USDT
-    min_vol = MIN_VOLUME_USDT
+    min_vol = float(min_volume_usdt)
     filtered = [s for s in usdt_symbols if vol_map.get(s, 0.0) >= min_vol]
 
     # 4) Urutkan dari volume terbesar → terkecil, lalu batasi max_pairs
@@ -379,10 +395,12 @@ def build_signal_message(
     momentum_ok         = conditions.get("momentum_ok")
     momentum_premium    = conditions.get("momentum_premium")
     not_choppy          = conditions.get("not_choppy")
+    setup_score         = conditions.get("setup_score", 0)
 
     text = f"""🟦 SMC AGGRESSIVE SCALPING — {symbol}
 
 Score: {score}/125 — Tier {tier} — {side_label}
+Setup internal: {setup_score}/3
 
 💰 Harga
 
@@ -398,13 +416,13 @@ Score: {score}/125 — Tier {tier} — {side_label}
 
 📌 Checklist Aggressive Scalping
 
-• Bias 5m (EMA20 > EMA50)      : {mark(bias_ok)}
-• Micro CHoCH (trigger)        : {mark(micro_choch)}
-• Micro CHoCH premium candle   : {mark(micro_choch_premium)}
-• Micro FVG (imbalance)        : {mark(micro_fvg)}
-• Momentum OK (RSI 45–75)      : {mark(momentum_ok)}
-• Momentum premium (RSI 50–68) : {mark(momentum_premium)}
-• Market tidak choppy          : {mark(not_choppy)}
+• Bias 5m (Close > EMA20 > EMA50) : {mark(bias_ok)}
+• Micro CHoCH (trigger)           : {mark(micro_choch)}
+• Micro CHoCH premium candle      : {mark(micro_choch_premium)}
+• Micro FVG (imbalance)           : {mark(micro_fvg)}
+• Momentum OK (RSI 45–75)         : {mark(momentum_ok)}
+• Momentum premium (RSI 50–68)    : {mark(momentum_premium)}
+• Market tidak choppy             : {mark(not_choppy)}
 
 📝 Catatan
 
@@ -555,6 +573,8 @@ def handle_command(cmd: str, args: list, chat_id: int):
             f"Scan       : {'AKTIF' if state.scanning else 'STANDBY'}\n"
             f"Min Tier   : {state.min_tier}\n"
             f"Cooldown   : {state.cooldown_seconds} detik\n"
+            f"Min Volume : {state.min_volume_usdt:,.0f} USDT\n"
+            f"Max Pairs  : {state.max_pairs} pair\n"
             f"Subscribers: {len(state.subscribers)} user\n"
             f"VIP Users  : {len(state.vip_users)} user\n",
             chat_id,
@@ -601,6 +621,60 @@ def handle_command(cmd: str, args: list, chat_id: int):
             send_telegram(f"⏲️ Cooldown di-set ke {cd} detik.", chat_id)
         except ValueError:
             send_telegram("Format salah. Gunakan: /cooldown 300", chat_id)
+        return
+
+    if cmd == "/minvol":
+        if not args:
+            send_telegram(
+                "📈 *SET MINIMUM VOLUME USDT*\n\n"
+                f"Sekarang: `{state.min_volume_usdt:,.0f}` USDT\n\n"
+                "Contoh:\n"
+                "`/minvol 50000000`  (50 juta USDT)\n"
+                "`/minvol 100000000` (100 juta USDT)",
+                chat_id,
+            )
+            return
+        try:
+            val = float(args[0])
+            if val < 0:
+                raise ValueError
+            state.min_volume_usdt = val
+            state.force_pairs_refresh = True  # supaya pair langsung di-refresh
+            save_bot_state()
+            send_telegram(
+                f"📈 Min volume di-set ke `{val:,.0f}` USDT.\n"
+                "Daftar pair akan di-refresh pada scan berikutnya.",
+                chat_id,
+            )
+        except ValueError:
+            send_telegram("Format salah. Contoh: `/minvol 100000000`", chat_id)
+        return
+
+    if cmd == "/maxpairs":
+        if not args:
+            send_telegram(
+                "📌 *SET MAXIMUM PAIR YANG DI-SCAN*\n\n"
+                f"Sekarang: `{state.max_pairs}` pair\n\n"
+                "Contoh:\n"
+                "`/maxpairs 20`\n"
+                "`/maxpairs 40`",
+                chat_id,
+            )
+            return
+        try:
+            val = int(args[0])
+            if val < 1:
+                raise ValueError
+            state.max_pairs = val
+            state.force_pairs_refresh = True  # supaya pair langsung di-refresh
+            save_bot_state()
+            send_telegram(
+                f"📌 Max pairs di-set ke *{val}*.\n"
+                "Daftar pair akan di-refresh pada scan berikutnya.",
+                chat_id,
+            )
+        except ValueError:
+            send_telegram("Format salah. Contoh: `/maxpairs 30`", chat_id)
         return
 
     if cmd == "/addvip":
@@ -836,6 +910,24 @@ def telegram_command_loop():
                                 chat_id,
                             )
                             continue
+                        if text == "📈 Min Volume":
+                            send_telegram(
+                                "📈 *MINIMUM VOLUME USDT*\n\n"
+                                f"Sekarang: `{state.min_volume_usdt:,.0f}` USDT\n\n"
+                                "Atur dengan command:\n"
+                                "`/minvol 100000000`  (contoh 100 juta USDT)\n",
+                                chat_id,
+                            )
+                            continue
+                        if text == "📌 Max Pair":
+                            send_telegram(
+                                "📌 *MAXIMUM PAIR YANG DI-SCAN*\n\n"
+                                f"Sekarang: `{state.max_pairs}` pair\n\n"
+                                "Atur dengan command:\n"
+                                "`/maxpairs 30`  (scan 30 pair teratas)\n",
+                                chat_id,
+                            )
+                            continue
                         if text == "⭐ VIP Control":
                             send_telegram(
                                 "⭐ *VIP CONTROL*\n\n"
@@ -880,6 +972,8 @@ def telegram_command_loop():
                                 "📊 Status Bot — lihat status.\n"
                                 "⚙️ Mode Tier — atur kualitas sinyal.\n"
                                 "⏲️ Cooldown — atur jarak antar sinyal.\n"
+                                "📈 Min Volume — filter volume minimum USDT.\n"
+                                "📌 Max Pair — atur jumlah pair yang discan.\n"
                                 "⭐ VIP Control — kelola VIP.\n"
                                 "🔄 Restart Bot — Soft/Hard restart bot.\n",
                                 chat_id,
@@ -892,11 +986,11 @@ def telegram_command_loop():
 
                     # ========== COMMAND BIASA (diawali /) ==========
                     parts = text.strip().split()
-                    cmd = parts[0]
-                    args = parts[1:]
+                    cmd_text = parts[0]
+                    args_text = parts[1:]
 
-                    print(f"[TELEGRAM CMD] {chat_id} {cmd} {args}")
-                    handle_command(cmd, args, chat_id)
+                    print(f"[TELEGRAM CMD] {chat_id} {cmd_text} {args_text}")
+                    handle_command(cmd_text, args_text, chat_id)
                     continue
 
                 # callback query
@@ -957,7 +1051,7 @@ async def run_bot():
                 or state.force_pairs_refresh
             ):
                 print("Refresh daftar pair USDT berdasarkan volume...")
-                symbols = get_usdt_pairs(MAX_USDT_PAIRS)
+                symbols = get_usdt_pairs(state.max_pairs, state.min_volume_usdt)
                 last_pairs_refresh = now
                 state.force_pairs_refresh = False
                 print(f"Scan {len(symbols)} pair:", ", ".join(s.upper() for s in symbols))
@@ -980,9 +1074,9 @@ async def run_bot():
                         state.request_soft_restart = False
                         break
 
-                    # cek perlu refresh pair karena 24 jam
+                    # cek perlu refresh pair karena interval
                     if time.time() - last_pairs_refresh > refresh_interval:
-                        print("24 jam berlalu → refresh daftar pair & reconnect WebSocket...")
+                        print("Interval refresh pair tercapai → refresh daftar pair & reconnect WebSocket...")
                         break
 
                     msg = await ws.recv()
@@ -1020,10 +1114,11 @@ async def run_bot():
                     if not conditions or not levels:
                         continue
 
-                    score = score_smc_signal(conditions)
-                    tier = tier_from_score(score)
+                    eval_res = evaluate_smc_signal(conditions, min_tier=state.min_tier)
+                    score = eval_res["score"]
+                    tier = eval_res["tier"]
 
-                    if not should_send_tier(tier, state.min_tier):
+                    if not eval_res["should_send"]:
                         if state.debug:
                             print(f"[{symbol}] Tier {tier} < {state.min_tier}, skip.")
                         continue
