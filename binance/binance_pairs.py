@@ -13,17 +13,21 @@ def get_usdt_pairs(max_pairs: int, min_volume_usdt: float) -> List[str]:
     Ambil semua pair USDT yang statusnya TRADING,
     lalu filter hanya yang 24h quote volume >= min_volume_usdt USDT.
     """
-    info_url = f"{BINANCE_REST_URL}/api/v3/exchangeInfo"
+    info_url = f"{BINANCE_REST_URL}/fapi/v1/exchangeInfo"
     r = requests.get(info_url, timeout=10)
     r.raise_for_status()
     info = r.json()
 
     usdt_symbols = []
     for s in info["symbols"]:
-        if s["status"] == "TRADING" and s["quoteAsset"] == "USDT":
+        if (
+            s.get("status") == "TRADING"
+            and s.get("quoteAsset") == "USDT"
+            and s.get("contractType") == "PERPETUAL"
+        ):
             usdt_symbols.append(s["symbol"])
 
-    ticker_url = f"{BINANCE_REST_URL}/api/v3/ticker/24hr"
+    ticker_url = f"{BINANCE_REST_URL}/fapi/v1/ticker/24hr"
     r2 = requests.get(ticker_url, timeout=10)
     r2.raise_for_status()
     tickers = r2.json()
