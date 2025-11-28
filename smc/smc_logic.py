@@ -13,7 +13,7 @@ from config import BINANCE_REST_URL
 
 def get_klines(symbol: str, interval: str, limit: int = 200) -> pd.DataFrame:
     """Ambil data candlestick Binance (REST)."""
-    url = f"{BINANCE_REST_URL}/api/v3/klines"
+    url = f"{BINANCE_REST_URL}/fapi/v1/klines"
     params = {"symbol": symbol.upper(), "interval": interval, "limit": limit}
 
     r = requests.get(url, params=params, timeout=10)
