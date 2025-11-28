@@ -47,6 +47,24 @@ def rsi(series: pd.Series, period: int = 14) -> pd.Series:
     return rsi_val
 
 
+def atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
+    """
+    Average True Range (ATR) untuk volatilitas.
+    Dipakai untuk buffer SL supaya lebih adaptif dengan market.
+    """
+    high = df["high"]
+    low = df["low"]
+    close = df["close"]
+
+    prev_close = close.shift(1)
+    tr1 = high - low
+    tr2 = (high - prev_close).abs()
+    tr3 = (low - prev_close).abs()
+
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    return tr.rolling(window=period, min_periods=1).mean()
+
+
 # ============================================================
 #               LOGIC SMC AGGRESSIVE SCALPING (5m)
 # ============================================================
@@ -55,6 +73,7 @@ def detect_bias_5m(df_5m: pd.DataFrame) -> bool:
     """
     Bias agresif 5m:
     - close > EMA20 > EMA50 (trend mikro naik)
+    - tambahan: EMA20 & EMA50 tidak jelas-jelas downtrend (cek slope)
     """
     close = df_5m["close"]
     ema20 = ema(close, 20)
@@ -64,7 +83,18 @@ def detect_bias_5m(df_5m: pd.DataFrame) -> bool:
     e20 = ema20.iloc[-1]
     e50 = ema50.iloc[-1]
 
-    return bool(last > e20 > e50)
+    # syarat utama
+    bias_stack = last > e20 > e50
+
+    # sedikit filter: ema jangan jelas-jelas downtrend tajam
+    if len(ema20) > 5 and len(ema50) > 5:
+        e20_prev = ema20.iloc[-5]
+        e50_prev = ema50.iloc[-5]
+        ema_slope_ok = (e20 >= e20_prev) and (e50 >= e50_prev)
+    else:
+        ema_slope_ok = True  # kalau data pendek, jangan terlalu strict
+
+    return bool(bias_stack and ema_slope_ok)
 
 
 def detect_micro_choch(df_5m: pd.DataFrame):
@@ -73,7 +103,7 @@ def detect_micro_choch(df_5m: pd.DataFrame):
     - high & low terakhir lebih tinggi dari swing kecil sebelumnya.
     Premium:
     - candle terakhir bullish
-    - body > 1.3x rata-rata body
+    - body > 1.3x rata-rata body 8 candle sebelumnya
     - upper wick <= 25% dari total range
     """
     highs = df_5m["high"].values
@@ -85,7 +115,7 @@ def detect_micro_choch(df_5m: pd.DataFrame):
     if n < 10:
         return False, False
 
-    # CHoCH dasar
+    # CHoCH dasar (pakai n-1 vs n-3 supaya "micro swing" sedikit lebih valid)
     micro_choch = bool(highs[-1] > highs[-3] and lows[-1] > lows[-3])
 
     # Premium detail
@@ -122,23 +152,41 @@ def detect_micro_fvg(df_5m: pd.DataFrame):
     """
     Micro FVG bullish (imbalance kecil):
     - low candle n > high candle n-1 di beberapa candle terakhir.
+    Di-upgrade:
+    - scan beberapa candle dan ambil FVG yang paling dekat dengan harga sekarang.
     """
     highs = df_5m["high"].values
     lows = df_5m["low"].values
+    closes = df_5m["close"].values
 
     n = len(highs)
     if n < 4:
         return False, 0.0, 0.0
 
-    # cek di 4 candle terakhir
-    start = max(0, n - 6)
+    last_close = closes[-1]
+    start = max(0, n - 12)  # scan lebih lebar tapi tetap "micro"
+    best_diff = None
+    best_low = 0.0
+    best_high = 0.0
+
     for i in range(start, n - 1):
+        # bullish FVG (imbalance ke atas)
         if lows[i + 1] > highs[i]:
             fvg_low = highs[i]
             fvg_high = lows[i + 1]
-            return True, float(fvg_low), float(fvg_high)
 
-    return False, 0.0, 0.0
+            # cari FVG yang paling dekat dengan harga sekarang
+            mid = (fvg_low + fvg_high) / 2.0
+            diff = abs(last_close - mid)
+            if (best_diff is None) or (diff < best_diff):
+                best_diff = diff
+                best_low = fvg_low
+                best_high = fvg_high
+
+    if best_diff is None:
+        return False, 0.0, 0.0
+
+    return True, float(best_low), float(best_high)
 
 
 def detect_momentum(df_5m: pd.DataFrame):
@@ -149,6 +197,7 @@ def detect_momentum(df_5m: pd.DataFrame):
     """
     closes = df_5m["close"]
     if len(closes) < 30:
+        # kalau data pendek, jangan terlalu ketat
         return True, False
 
     rsi_val = rsi(closes, 14).iloc[-1]
@@ -161,8 +210,9 @@ def detect_momentum(df_5m: pd.DataFrame):
 
 def detect_not_choppy(df_5m: pd.DataFrame, window: int = 20) -> bool:
     """
-    Filter choppy ringan:
+    Filter choppy:
     - range total > 1.5x rata-rata range candle.
+    - kalau candle terlalu kecil semua (super pelan), dianggap choppy.
     """
     highs = df_5m["high"].values
     lows = df_5m["low"].values
@@ -180,7 +230,15 @@ def detect_not_choppy(df_5m: pd.DataFrame, window: int = 20) -> bool:
     if avg_range <= 0:
         return False
 
-    return bool(full_range > avg_range * 1.5)
+    # kondisi utama
+    trendiness_ok = full_range > avg_range * 1.5
+
+    # kalau rata-rata range sangat kecil -> market lagi super pelan / choppy
+    tiny_range = avg_range <= (seg_low.mean() * 0.001)  # ~0.1%
+    if tiny_range:
+        return False
+
+    return bool(trendiness_ok)
 
 
 # ============================================================
@@ -196,6 +254,7 @@ def build_entry_sl_tp_aggressive(df_5m: pd.DataFrame,
     - kalau tidak → pakai close terakhir
     SL:
     - sedikit di bawah swing low pendek
+    - ada buffer berbasis ATR (bukan hanya % fixed)
     TP:
     - kelipatan jarak entry–SL (scalping RR 1:1.2 / 1:2 / 1:3)
     """
@@ -204,18 +263,30 @@ def build_entry_sl_tp_aggressive(df_5m: pd.DataFrame,
 
     last_close = closes[-1]
 
+    # Entry di mid FVG kalau tersedia
     if fvg_low and fvg_high and fvg_high > fvg_low:
         entry = (fvg_low + fvg_high) / 2.0
     else:
         entry = last_close
 
+    # Swing low pendek sebagai acuan SL
     recent_low = lows[-5:].min()
-    buffer = abs(last_close) * 0.002  # ~0.2%
+
+    # ATR sebagai buffer utama
+    atr_series = atr(df_5m, period=14)
+    atr_val = float(atr_series.iloc[-1]) if not np.isnan(atr_series.iloc[-1]) else 0.0
+
+    # Kalau ATR valid, pakai ATR; kalau tidak, fallback ke persentase
+    if atr_val > 0:
+        buffer = atr_val * 0.3  # 30% ATR buffer
+    else:
+        buffer = abs(last_close) * 0.002  # ~0.2% fallback
+
     sl = recent_low - buffer
 
     risk = abs(entry - sl)
     if risk <= 0:
-        risk = abs(entry) * 0.003  # fallback kecil
+        risk = max(abs(entry) * 0.003, 1e-8)  # fallback kecil tapi non-zero
 
     tp1 = entry + risk * 1.2
     tp2 = entry + risk * 2.0
@@ -227,6 +298,7 @@ def build_entry_sl_tp_aggressive(df_5m: pd.DataFrame,
         "tp1": float(tp1),
         "tp2": float(tp2),
         "tp3": float(tp3),
+        "risk_per_unit": float(risk),
     }
 
 
@@ -238,15 +310,23 @@ def analyse_symbol(symbol: str):
     """
     Versi SMC Aggressive Scalping (LONG only):
     - Timeframe utama: 5m
-    - Bias: close > EMA20 > EMA50
+    - Bias: close > EMA20 > EMA50 (+ ema tidak clearly downtrend)
     - Trigger: micro CHoCH (premium = body kuat & wick bersih)
     - Confluence: micro FVG (jika ada)
     - Filter: momentum + tidak terlalu choppy
+
+    Return:
+    - None, None  → tidak ada setup
+    - conditions, levels → setup valid
     """
     try:
         df_5m = get_klines(symbol, "5m", 220)
     except Exception as e:
         print(f"[{symbol}] ERROR fetching data:", e)
+        return None, None
+
+    if df_5m is None or df_5m.empty:
+        print(f"[{symbol}] Empty dataframe from get_klines")
         return None, None
 
     bias_ok = detect_bias_5m(df_5m)
@@ -263,7 +343,18 @@ def analyse_symbol(symbol: str):
     if not (bias_ok and momentum_ok and micro_choch and not_choppy):
         return None, None
 
+    # simple scoring untuk kualitas setup internal (0–3)
+    setup_score = 0
+    if micro_choch_premium:
+        setup_score += 1
+    if micro_fvg:
+        setup_score += 1
+    if momentum_premium:
+        setup_score += 1
+
     conditions = {
+        "symbol": symbol.upper(),
+        "timeframe": "5m",
         "bias_ok": bias_ok,
         "micro_choch": micro_choch,
         "micro_choch_premium": micro_choch_premium,
@@ -271,6 +362,7 @@ def analyse_symbol(symbol: str):
         "momentum_ok": momentum_ok,
         "momentum_premium": momentum_premium,
         "not_choppy": not_choppy,
+        "setup_score": setup_score,  # 0–3
     }
 
     levels = build_entry_sl_tp_aggressive(df_5m, fvg_low, fvg_high)
