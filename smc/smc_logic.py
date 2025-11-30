@@ -12,7 +12,7 @@ from config import BINANCE_REST_URL
 # ================== DATA FETCHING & UTIL ==================
 
 def get_klines(symbol: str, interval: str, limit: int = 200) -> pd.DataFrame:
-    """Ambil data candlestick Binance (REST)."""
+    """Ambil data candlestick Binance (REST Futures)."""
     url = f"{BINANCE_REST_URL}/fapi/v1/klines"
     params = {"symbol": symbol.upper(), "interval": interval, "limit": limit}
 
@@ -50,7 +50,7 @@ def rsi(series: pd.Series, period: int = 14) -> pd.Series:
 def atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
     """
     Average True Range (ATR) untuk volatilitas.
-    Dipakai untuk buffer SL supaya lebih adaptif dengan market.
+    Dipakai untuk buffer SL & filter choppy.
     """
     high = df["high"]
     low = df["low"]
@@ -73,7 +73,7 @@ def detect_bias_generic(df: pd.DataFrame) -> bool:
     """
     Bias generik:
     - close > EMA20 > EMA50
-    - EMA20 & EMA50 tidak jelas-jelas downtrend (cek slope 5 candle ke belakang)
+    - EMA20 & EMA50 benar-benar naik (cek slope 5 candle ke belakang).
     Bisa dipakai untuk 5m, 15m, 1H.
     """
     close = df["close"]
@@ -89,7 +89,14 @@ def detect_bias_generic(df: pd.DataFrame) -> bool:
     if len(ema20) > 5 and len(ema50) > 5:
         e20_prev = ema20.iloc[-5]
         e50_prev = ema50.iloc[-5]
-        ema_slope_ok = (e20 >= e20_prev) and (e50 >= e50_prev)
+
+        base20 = max(abs(e20_prev), 1e-9)
+        base50 = max(abs(e50_prev), 1e-9)
+        slope20 = (e20 - e20_prev) / base20
+        slope50 = (e50 - e50_prev) / base50
+
+        # butuh slope naik, bukan flat
+        ema_slope_ok = (slope20 > 0.001) and (slope50 > 0.0005)
     else:
         ema_slope_ok = True
 
@@ -153,8 +160,7 @@ def detect_micro_fvg(df_5m: pd.DataFrame):
     """
     Micro FVG bullish (imbalance kecil):
     - low candle n > high candle n-1 di beberapa candle terakhir.
-    Di-upgrade:
-    - scan beberapa candle dan ambil FVG yang paling dekat dengan harga sekarang.
+    - ambil FVG yang paling dekat dengan harga sekarang.
     """
     highs = df_5m["high"].values
     lows = df_5m["low"].values
@@ -190,9 +196,9 @@ def detect_micro_fvg(df_5m: pd.DataFrame):
 
 def detect_momentum(df_5m: pd.DataFrame):
     """
-    Momentum:
-    - OK: RSI 45–72
-    - Premium: RSI 50–65 (lebih aman di atas)
+    Momentum (LONG):
+    - OK: RSI 50–72  (RSI < 50 → SKIP, biar tidak entry di market lemah)
+    - Premium: RSI 52–65 (sweet spot tren sehat)
     """
     closes = df_5m["close"]
     if len(closes) < 30:
@@ -200,8 +206,8 @@ def detect_momentum(df_5m: pd.DataFrame):
 
     rsi_val = rsi(closes, 14).iloc[-1]
 
-    momentum_ok = bool(45 < rsi_val < 72)
-    momentum_premium = bool(50 < rsi_val < 65)
+    momentum_ok = bool(50 <= rsi_val < 72)
+    momentum_premium = bool(52 <= rsi_val <= 65)
 
     return momentum_ok, momentum_premium
 
@@ -209,8 +215,8 @@ def detect_momentum(df_5m: pd.DataFrame):
 def detect_not_choppy(df_5m: pd.DataFrame, window: int = 20) -> bool:
     """
     Filter choppy:
-    - range total > 1.5x rata-rata range candle.
-    - kalau candle terlalu kecil semua (super pelan), dianggap choppy.
+    - range total > 1.8x rata-rata range candle.
+    - ATR relatif terhadap harga tidak terlalu kecil (market tidak 'tidur').
     """
     highs = df_5m["high"].values
     lows = df_5m["low"].values
@@ -228,10 +234,20 @@ def detect_not_choppy(df_5m: pd.DataFrame, window: int = 20) -> bool:
     if avg_range <= 0:
         return False
 
-    trendiness_ok = full_range > avg_range * 1.5
+    trendiness_ok = full_range > avg_range * 1.8
 
-    tiny_range = avg_range <= (seg_low.mean() * 0.001)
-    if tiny_range:
+    # ATR check
+    atr_series = atr(df_5m, period=14)
+    atr_val = float(atr_series.iloc[-1]) if not np.isnan(atr_series.iloc[-1]) else 0.0
+    last_price = float(df_5m["close"].iloc[-1])
+
+    if last_price > 0:
+        atr_pct = atr_val / last_price
+    else:
+        atr_pct = 0.0
+
+    # kalau ATR < 0.4% harga → dianggap terlalu kalem/choppy
+    if atr_pct < 0.004:
         return False
 
     return bool(trendiness_ok)
@@ -327,18 +343,14 @@ def build_entry_sl_tp_aggressive(df_5m: pd.DataFrame,
 
 def analyse_symbol(symbol: str):
     """
-    Versi SMC Aggressive Scalping (LONG only):
+    Versi SMC Aggressive Scalping (LONG only, FUTURES):
     - Timeframe entry: 5m
     - Konfirmasi trend: 15m (WAJIB)
     - Trend besar: 1H (WAJIB)
-    - Bias 5m: close > EMA20 > EMA50 (+ ema tidak clearly downtrend)
-    - Trigger: micro CHoCH (premium = body kuat & wick bersih)
+    - Bias 5m: close > EMA20 > EMA50 + EMA benar-benar naik
+    - Trigger: micro CHoCH *PREMIUM WAJIB* (candle impuls kuat)
     - Confluence: micro FVG (jika ada)
-    - Filter: momentum + tidak terlalu choppy + tidak overextended
-
-    Return:
-    - None, None  → tidak ada setup
-    - conditions, levels → setup valid
+    - Filter: momentum (RSI >= 50), tidak terlalu choppy, tidak overextended
     """
     try:
         df_5m = get_klines(symbol, "5m", 220)
@@ -362,12 +374,10 @@ def analyse_symbol(symbol: str):
     not_choppy = detect_not_choppy(df_5m)
     not_overextended = detect_not_overextended(df_5m)
 
-    # Syarat inti agresif (sekarang 1H juga WAJIB):
-    # - Wajib bias 5m OK
-    # - Wajib bias 15m OK
-    # - Wajib bias 1H OK
-    # - Wajib momentum OK
-    # - Wajib micro CHoCH
+    # Syarat inti agresif (lebih ketat):
+    # - Bias 5m, 15m, 1H wajib OK
+    # - Momentum OK (RSI >= 50)
+    # - Micro CHoCH *PREMIUM WAJIB*
     # - Market tidak choppy
     # - Tidak over-extended
     if not (
@@ -376,6 +386,7 @@ def analyse_symbol(symbol: str):
         and bias_1h
         and momentum_ok
         and micro_choch
+        and micro_choch_premium
         and not_choppy
         and not_overextended
     ):
@@ -391,8 +402,8 @@ def analyse_symbol(symbol: str):
     levels = build_entry_sl_tp_aggressive(df_5m, fvg_low, fvg_high)
     entry = levels["entry"]
 
-    if last_range > 0 and (last_high - entry) < (0.2 * last_range):
-        # entry berada di 20% range atas candle terakhir → rawan di pucuk
+    # Anti entry di pucuk: kalau entry terlalu dekat high candle terakhir, skip
+    if last_range > 0 and (last_high - entry) < (0.3 * last_range):
         return None, None
 
     setup_score = 0
