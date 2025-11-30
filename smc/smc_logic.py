@@ -351,9 +351,9 @@ def analyse_symbol(symbol: str):
     - Konfirmasi trend: 15m (WAJIB)
     - Trend besar: 1H (WAJIB)
     - Bias 5m: close > EMA20 > EMA50 + EMA benar-benar naik
-    - Trigger: micro CHoCH *PREMIUM WAJIB* (candle impuls kuat)
+    - Trigger: micro CHoCH (WAJIB, premium diutamakan tapi tidak wajib)
     - Confluence: micro FVG (jika ada)
-    - Filter: momentum (RSI >= 50), tidak terlalu choppy, tidak overextended
+    - Filter: momentum (RSI >= ~48–50), tidak overextended
     """
     try:
         df_5m = get_klines(symbol, "5m", 220)
@@ -377,22 +377,26 @@ def analyse_symbol(symbol: str):
     not_choppy = detect_not_choppy(df_5m)
     not_overextended = detect_not_overextended(df_5m)
 
-    # Syarat inti agresif (lebih ketat):
-    # - Bias 5m, 15m, 1H wajib OK
-    # - Momentum OK (RSI >= 50)
-    # - Micro CHoCH *PREMIUM WAJIB*
-    # - Market tidak choppy
-    # - Tidak over-extended
-    if not (
+    # Syarat inti agresif (DILONGGARKAN):
+    # Wajib:
+    # - Bias 5m, 15m, 1H OK
+    # - Momentum OK
+    # - Ada micro CHoCH (trigger jelas)
+    # - Tidak overextended dari EMA
+    #
+    # Catatan:
+    # - micro_choch_premium, micro_fvg, not_choppy jadi faktor kualitas
+    #   (masuk scoring & setup_score), tapi tidak lagi WAJIB.
+    core_ok = (
         bias_5m
         and bias_15m
         and bias_1h
         and momentum_ok
         and micro_choch
-        and micro_choch_premium
-        and not_choppy
         and not_overextended
-    ):
+    )
+
+    if not core_ok:
         return None, None
 
     htf_15m_trend_ok = bias_15m
