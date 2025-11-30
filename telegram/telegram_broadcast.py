@@ -126,7 +126,7 @@ Jika harga:
 📌 Checklist Aggressive Scalping (5m)
 
 • Micro CHoCH (trigger)                   : {mark(micro_choch)}
-• Micro CHoCH premium candle (wajib)      : {mark(micro_choch_premium)}
+• Micro CHoCH premium candle (lebih kuat) : {mark(micro_choch_premium)}
 • Micro FVG (imbalance)                   : {mark(micro_fvg)}
 • Momentum OK (RSI ≥ 50)                  : {mark(momentum_ok)}
 • Momentum premium (RSI 52–65)            : {mark(momentum_premium)}
