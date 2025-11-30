@@ -32,9 +32,7 @@ def score_smc_signal(c: Dict) -> int:
     setup_score_internal = c.get("setup_score") or 0
     setup_score_internal = max(0, min(int(setup_score_internal), 3))
 
-    # --------------------
     # 1) Bias + HTF
-    # --------------------
     if bias_ok:
         score += 20
 
@@ -44,9 +42,7 @@ def score_smc_signal(c: Dict) -> int:
     if htf_1h_trend_ok:
         score += 15
 
-    # --------------------
     # 2) Micro structure
-    # --------------------
     if micro_choch:
         score += 20
 
@@ -56,28 +52,21 @@ def score_smc_signal(c: Dict) -> int:
     if micro_fvg:
         score += 10
 
-    # --------------------
     # 3) Momentum (RSI)
-    # --------------------
     if momentum_ok:
         score += 20
 
     if momentum_premium:
         score += 15
 
-    # --------------------
     # 4) Market quality
-    # --------------------
     if not_choppy:
         score += 10
 
     if not_overextended:
         score += 10
 
-    # --------------------
     # 5) Synergy bonus
-    # --------------------
-    # setup internal 0–3 ikut memberi bumbu ekstra
     if (
         bias_ok
         and htf_15m_trend_ok
@@ -87,7 +76,6 @@ def score_smc_signal(c: Dict) -> int:
     ):
         score += 10 + setup_score_internal * 2  # max +16
 
-    # clamp biar gak lebay
     return int(min(score, 150))
 
 
