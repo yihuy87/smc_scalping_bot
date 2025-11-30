@@ -119,14 +119,14 @@ Jika harga:
 
 📌 Checklist Multi-Timeframe
 
-• Bias 5m (Close > EMA20 > EMA50 & naik) : {mark(bias_ok)}
+• Bias 5m (Close > EMA20 > EMA50 & naik)  : {mark(bias_ok)}
 • Bias 15m searah                         : {mark(htf_15m_trend_ok)}
 • Bias 1H searah                          : {mark(htf_1h_trend_ok)}
 
 📌 Checklist Aggressive Scalping (5m)
 
 • Micro CHoCH (trigger)                   : {mark(micro_choch)}
-• Micro CHoCH premium candle (lebih kuat) : {mark(micro_choch_premium)}
+• Micro CHoCH premium candle              : {mark(micro_choch_premium)}
 • Micro FVG (imbalance)                   : {mark(micro_fvg)}
 • Momentum OK (RSI ≥ 50)                  : {mark(momentum_ok)}
 • Momentum premium (RSI 52–65)            : {mark(momentum_premium)}
@@ -138,7 +138,7 @@ Jika harga:
 Strategi:
 • Entry di 5m, tetapi wajib searah 15m dan 1H.
 • Momentum minimal RSI 50 untuk long (hindari market lemah).
-• Micro CHoCH *premium* wajib: body kuat, wick bersih → mengurangi fake breakout.
+• Micro CHoCH premium: body kuat, wick bersih → mengurangi fake breakout.
 • Filter tambahan: ATR & range untuk hindari market choppy/ terlalu tenang.
 • Hindari entry di pucuk (over-extended dari EMA).
 • Validation rules mencegah FOMO & deep retrace yang merusak R:R.
