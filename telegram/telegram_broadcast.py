@@ -83,7 +83,7 @@ def build_signal_message(
 
     text = f"""🟦 SMC AGGRESSIVE SCALPING — {symbol}
 
-Score: {score}/125 — Tier {tier} — {side_label}
+Score: {score}/150 — Tier {tier} — {side_label}
 Setup internal (5m): {setup_score}/3
 
 💰 Harga
@@ -100,26 +100,29 @@ Setup internal (5m): {setup_score}/3
 
 📌 Checklist Multi-Timeframe
 
-• Bias 5m (Close > EMA20 > EMA50) : {mark(bias_ok)}
-• Bias 15m searah                  : {mark(htf_15m_trend_ok)}
-• Bias 1H searah                  : {mark(htf_1h_trend_ok)}
+• Bias 5m (Close > EMA20 > EMA50 & naik) : {mark(bias_ok)}
+• Bias 15m searah                         : {mark(htf_15m_trend_ok)}
+• Bias 1H searah                          : {mark(htf_1h_trend_ok)}
 
 📌 Checklist Aggressive Scalping (5m)
 
-• Micro CHoCH (trigger)           : {mark(micro_choch)}
-• Micro CHoCH premium candle      : {mark(micro_choch_premium)}
-• Micro FVG (imbalance)           : {mark(micro_fvg)}
-• Momentum OK (RSI 45–72)         : {mark(momentum_ok)}
-• Momentum premium (RSI 50–65)    : {mark(momentum_premium)}
-• Market tidak choppy             : {mark(not_choppy)}
-• Tidak over-extended dari EMA    : {mark(not_overextended)}
+• Micro CHoCH (trigger)                   : {mark(micro_choch)}
+• Micro CHoCH premium candle (wajib)      : {mark(micro_choch_premium)}
+• Micro FVG (imbalance)                   : {mark(micro_fvg)}
+• Momentum OK (RSI ≥ 50)                  : {mark(momentum_ok)}
+• Momentum premium (RSI sweet spot)       : {mark(momentum_premium)}
+• Market tidak choppy (ATR & range)       : {mark(not_choppy)}
+• Tidak over-extended dari EMA            : {mark(not_overextended)}
 
 📝 Catatan
 
 Strategi:
 • Entry di 5m, tetapi wajib searah 15m dan 1H.
-• Filter tambahan: hindari entry di pucuk (over-extended).
-• Tier A+ diset ketat — confluence multi-timeframe lebih kuat.
+• Momentum minimal RSI 50 untuk long (hindari market lemah).
+• Micro CHoCH *premium* wajib: body kuat, wick bersih → kurangi fake breakout.
+• Filter tambahan: ATR & range untuk hindari market choppy / terlalu tenang.
+• Hindari entry di pucuk (over-extended dari EMA).
+• Tier A+ diset ketat — hanya muncul saat confluence multi-timeframe & momentum kuat.
 
 Free: maksimal 2 sinyal/hari. VIP: Unlimited sinyal.
 """
