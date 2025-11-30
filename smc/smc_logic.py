@@ -12,7 +12,7 @@ from config import BINANCE_REST_URL
 # ================== DATA FETCHING & UTIL ==================
 
 def get_klines(symbol: str, interval: str, limit: int = 200) -> pd.DataFrame:
-    """Ambil data candlestick Binance (REST Futures)."""
+    """Ambil data candlestick Binance Futures (REST)."""
     url = f"{BINANCE_REST_URL}/fapi/v1/klines"
     params = {"symbol": symbol.upper(), "interval": interval, "limit": limit}
 
@@ -126,6 +126,7 @@ def detect_micro_choch(df_5m: pd.DataFrame):
     if n < 10:
         return False, False
 
+    # swing kecil: bandingkan ke 2 candle sebelumnya
     micro_choch = bool(highs[-1] > highs[-3] and lows[-1] > lows[-3])
 
     last_open = opens[-1]
@@ -133,6 +134,7 @@ def detect_micro_choch(df_5m: pd.DataFrame):
     last_high = highs[-1]
     last_low = lows[-1]
 
+    # harus bullish
     if last_close <= last_open:
         return micro_choch, False
 
@@ -197,7 +199,7 @@ def detect_micro_fvg(df_5m: pd.DataFrame):
 def detect_momentum(df_5m: pd.DataFrame):
     """
     Momentum (LONG):
-    - OK: RSI 50–72  (RSI < 50 → SKIP, biar tidak entry di market lemah)
+    - OK: RSI 50–72 (RSI < 50 → skip, market lemah)
     - Premium: RSI 52–65 (sweet spot tren sehat)
     """
     closes = df_5m["close"]
@@ -214,7 +216,7 @@ def detect_momentum(df_5m: pd.DataFrame):
 
 def detect_not_choppy(df_5m: pd.DataFrame, window: int = 20) -> bool:
     """
-    Filter choppy:
+    Filter choppy agresif tapi ketat:
     - range total > 1.8x rata-rata range candle.
     - ATR relatif terhadap harga tidak terlalu kecil (market tidak 'tidur').
     """
@@ -255,11 +257,12 @@ def detect_not_choppy(df_5m: pd.DataFrame, window: int = 20) -> bool:
 
 def detect_not_overextended(df_5m: pd.DataFrame,
                             ema_period: int = 20,
-                            max_distance_pct: float = 0.015) -> bool:
+                            max_distance_pct: float = 0.012) -> bool:
     """
     TRUE kalau harga TIDAK terlalu jauh dari EMA (tidak over-extended).
     Untuk long:
     - close tidak lebih dari max_distance_pct di atas EMA20.
+    (lebih ketat: default 1.2%)
     """
     close = df_5m["close"]
     ema20 = ema(close, ema_period)
