@@ -66,8 +66,9 @@ def build_signal_message(
 
     # risk dari SL–entry (untuk hitung toleransi validasi)
     risk = abs(entry - sl)
-    tol_up = entry + (0.25 * risk)   # agresif tapi cukup ketat
-    tol_down = entry - (0.12 * risk)
+    
+    tol_up = entry + (0.30 * risk) # agresif tapi cukup ketat
+    tol_down = entry - (0.15 * risk)
 
     def mark(flag: bool) -> str:
         return "✅" if flag else "❌"
@@ -106,10 +107,10 @@ Setup internal (5m): {setup_score}/3
 📌 VALIDATION RULES (penting)
 
 Harga dianggap *VALID* untuk entry jika:
-• Harga TIDAK naik lebih dari `entry + 0.25 × risk`
+• Harga TIDAK naik lebih dari `entry + 0.30 × risk`
   → Batas atas ≈ `{tol_up:.6f}`
 
-• Harga TIDAK turun lebih dari `entry - 0.12 × risk`
+• Harga TIDAK turun lebih dari `entry - 0.15 × risk`
   → Batas bawah ≈ `{tol_down:.6f}`
 
 Jika harga:
