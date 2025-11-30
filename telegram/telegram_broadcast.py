@@ -66,8 +66,8 @@ def build_signal_message(
 
     # risk dari SL–entry (untuk hitung toleransi validasi)
     risk = abs(entry - sl)
-    tol_up = entry + (0.33 * risk)
-    tol_down = entry - (0.15 * risk)
+    tol_up = entry + (0.25 * risk)   # agresif tapi cukup ketat
+    tol_down = entry - (0.12 * risk)
 
     def mark(flag: bool) -> str:
         return "✅" if flag else "❌"
@@ -88,47 +88,60 @@ def build_signal_message(
 
     text = f"""🟦 SMC AGGRESSIVE SCALPING — {symbol}
 
-Score: {score}/125 — Tier {tier} — {side_label}
+Score: {score}/150 — Tier {tier} — {side_label}
 Setup internal (5m): {setup_score}/3
 
 💰 Harga
+
 • Entry : `{entry:.6f}`
+
 • SL    : `{sl:.6f}`
+
 • TP1   : `{tp1:.6f}`
+
 • TP2   : `{tp2:.6f}`
+
 • TP3   : `{tp3:.6f}`
 
-📌 *VALIDATION RULES (penting)*
+📌 VALIDATION RULES (penting)
 
-Harga dianggap **VALID** untuk entry jika:
-• Harga TIDAK naik lebih dari `entry + 0.33 × risk`
-  → batas atas: `{tol_up:.6f}`
+Harga dianggap *VALID* untuk entry jika:
+• Harga TIDAK naik lebih dari `entry + 0.25 × risk`
+  → Batas atas ≈ `{tol_up:.6f}`
 
-• Harga TIDAK turun lebih dari `entry - 0.15 × risk`
-  → batas bawah: `{tol_down:.6f}`
+• Harga TIDAK turun lebih dari `entry - 0.12 × risk`
+  → Batas bawah ≈ `{tol_down:.6f}`
 
 Jika harga:
-• naik di atas batas atas → *entry batal (lewat / FOMO)*  
-• turun di bawah batas bawah → *bias lemah / momentum hilang (batal)*
+• Naik di atas batas atas → *entry batal* (lewat/FOMO, jangan kejar)
+• Turun di bawah batas bawah → *entry batal* (retracement terlalu dalam, momentum lemah)
 
 📌 Checklist Multi-Timeframe
-• Bias 5m (Close > EMA20 > EMA50) : {mark(bias_ok)}
-• Bias 15m searah                  : {mark(htf_15m_trend_ok)}
-• Bias 1H searah                  : {mark(htf_1h_trend_ok)}
+
+• Bias 5m (Close > EMA20 > EMA50 & naik) : {mark(bias_ok)}
+• Bias 15m searah                         : {mark(htf_15m_trend_ok)}
+• Bias 1H searah                          : {mark(htf_1h_trend_ok)}
 
 📌 Checklist Aggressive Scalping (5m)
-• Micro CHoCH (trigger)           : {mark(micro_choch)}
-• Micro CHoCH premium candle      : {mark(micro_choch_premium)}
-• Micro FVG (imbalance)           : {mark(micro_fvg)}
-• Momentum OK (RSI 45–72)         : {mark(momentum_ok)}
-• Momentum premium (RSI 50–65)    : {mark(momentum_premium)}
-• Market tidak choppy             : {mark(not_choppy)}
-• Tidak over-extended dari EMA    : {mark(not_overextended)}
+
+• Micro CHoCH (trigger)                   : {mark(micro_choch)}
+• Micro CHoCH premium candle (wajib)      : {mark(micro_choch_premium)}
+• Micro FVG (imbalance)                   : {mark(micro_fvg)}
+• Momentum OK (RSI ≥ 50)                  : {mark(momentum_ok)}
+• Momentum premium (RSI 52–65)            : {mark(momentum_premium)}
+• Market tidak choppy (ATR & range)       : {mark(not_choppy)}
+• Tidak over-extended dari EMA            : {mark(not_overextended)}
 
 📝 Catatan
-• Entry menggunakan level optimal berdasarkan FVG/discount.
-• Validation rules mencegah entry FOMO dan fakeout dalam 5–10 menit pertama.
-• Tier A+ diset ketat — confluence kuat multi-timeframe.
+
+Strategi:
+• Entry di 5m, tetapi wajib searah 15m dan 1H.
+• Momentum minimal RSI 50 untuk long (hindari market lemah).
+• Micro CHoCH *premium* wajib: body kuat, wick bersih → mengurangi fake breakout.
+• Filter tambahan: ATR & range untuk hindari market choppy/ terlalu tenang.
+• Hindari entry di pucuk (over-extended dari EMA).
+• Validation rules mencegah FOMO & deep retrace yang merusak R:R.
+• Tier A+ diset ketat — hanya muncul saat confluence multi-timeframe & momentum kuat.
 
 Free: maksimal 2 sinyal/hari. VIP: Unlimited sinyal.
 """
