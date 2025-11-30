@@ -208,8 +208,8 @@ def detect_momentum(df_5m: pd.DataFrame):
 
     rsi_val = rsi(closes, 14).iloc[-1]
 
-    momentum_ok = bool(50 <= rsi_val < 72)
-    momentum_premium = bool(52 <= rsi_val <= 65)
+    momentum_ok = bool(48 <= rsi_val < 74)
+    momentum_premium = bool(52 <= rsi_val <= 68)
 
     return momentum_ok, momentum_premium
 
@@ -236,7 +236,7 @@ def detect_not_choppy(df_5m: pd.DataFrame, window: int = 20) -> bool:
     if avg_range <= 0:
         return False
 
-    trendiness_ok = full_range > avg_range * 1.8
+    trendiness_ok = full_range > avg_range * 1.6
 
     # ATR check
     atr_series = atr(df_5m, period=14)
@@ -248,8 +248,8 @@ def detect_not_choppy(df_5m: pd.DataFrame, window: int = 20) -> bool:
     else:
         atr_pct = 0.0
 
-    # kalau ATR < 0.4% harga → dianggap terlalu kalem/choppy
-    if atr_pct < 0.004:
+    # kalau ATR < 0.3% harga → dianggap terlalu kalem/choppy
+    if atr_pct < 0.003:
         return False
 
     return bool(trendiness_ok)
@@ -257,7 +257,7 @@ def detect_not_choppy(df_5m: pd.DataFrame, window: int = 20) -> bool:
 
 def detect_not_overextended(df_5m: pd.DataFrame,
                             ema_period: int = 20,
-                            max_distance_pct: float = 0.012) -> bool:
+                            max_distance_pct: float = 0.015) -> bool:
     """
     TRUE kalau harga TIDAK terlalu jauh dari EMA (tidak over-extended).
     Untuk long:
@@ -406,7 +406,7 @@ def analyse_symbol(symbol: str):
     entry = levels["entry"]
 
     # Anti entry di pucuk: kalau entry terlalu dekat high candle terakhir, skip
-    if last_range > 0 and (last_high - entry) < (0.3 * last_range):
+    if last_range > 0 and (last_high - entry) < (0.25 * last_range):
         return None, None
 
     setup_score = 0
