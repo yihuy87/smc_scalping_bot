@@ -8,88 +8,102 @@ from typing import Dict
 
 def score_smc_signal(c: Dict) -> int:
     """
-    Scoring untuk setup Aggressive Scalping (0–125).
-    A+ di-design lebih jarang.
-
-    Menggunakan:
-    - 5m bias + struktur
-    - 15m trend
-    - 1H trend (di logic sudah wajib)
-    - Kualitas micro (CHoCH premium, FVG, momentum premium)
-    - Market quality (tidak choppy, tidak overextended)
+    Scoring untuk setup Aggressive Scalping (0–150-an).
+    Lebih sensitif ke:
+    - Bias 5m + HTF (15m & 1H)
+    - Kualitas micro (CHoCH premium, FVG)
+    - Momentum (RSI)
+    - Market quality (choppy / overextended)
     """
+
     score = 0
 
-    bias_ok = bool(c.get("bias_ok"))
-    micro_choch = bool(c.get("micro_choch"))
+    bias_ok             = bool(c.get("bias_ok"))
+    micro_choch         = bool(c.get("micro_choch"))
     micro_choch_premium = bool(c.get("micro_choch_premium"))
-    micro_fvg = bool(c.get("micro_fvg"))
-    momentum_ok = bool(c.get("momentum_ok"))
-    momentum_premium = bool(c.get("momentum_premium"))
-    not_choppy = bool(c.get("not_choppy"))
-    not_overextended = bool(c.get("not_overextended"))
-    htf_15m_trend_ok = bool(c.get("htf_15m_trend_ok"))
-    htf_1h_trend_ok = bool(c.get("htf_1h_trend_ok"))
+    micro_fvg           = bool(c.get("micro_fvg"))
+    momentum_ok         = bool(c.get("momentum_ok"))
+    momentum_premium    = bool(c.get("momentum_premium"))
+    not_choppy          = bool(c.get("not_choppy"))
+    not_overextended    = bool(c.get("not_overextended"))
+    htf_15m_trend_ok    = bool(c.get("htf_15m_trend_ok"))
+    htf_1h_trend_ok     = bool(c.get("htf_1h_trend_ok"))
 
     setup_score_internal = c.get("setup_score") or 0
     setup_score_internal = max(0, min(int(setup_score_internal), 3))
 
-    # Bias 5m
+    # --------------------
+    # 1) Bias + HTF
+    # --------------------
     if bias_ok:
-        score += 15
+        score += 20
 
-    # Trend HTF 15m
     if htf_15m_trend_ok:
-        score += 10
+        score += 15
 
-    # Trend HTF 1H
     if htf_1h_trend_ok:
-        score += 10
+        score += 15
 
-    # Micro CHoCH
+    # --------------------
+    # 2) Micro structure
+    # --------------------
     if micro_choch:
-        score += 25
+        score += 20
+
     if micro_choch_premium:
-        score += 10
+        score += 20   # candle impuls premium lebih dihargai
 
-    # Micro FVG
     if micro_fvg:
-        score += 15
-
-    # Momentum
-    if momentum_ok:
-        score += 15
-    if momentum_premium:
         score += 10
 
-    # Market quality
+    # --------------------
+    # 3) Momentum (RSI)
+    # --------------------
+    if momentum_ok:
+        score += 20
+
+    if momentum_premium:
+        score += 15
+
+    # --------------------
+    # 4) Market quality
+    # --------------------
     if not_choppy:
         score += 10
+
     if not_overextended:
         score += 10
 
-    # Synergy bonus:
-    # - Bias 5m + HTF 15m + HTF 1H + micro CHoCH + momentum OK
-    if bias_ok and htf_15m_trend_ok and htf_1h_trend_ok and micro_choch and momentum_ok:
-        synergy = 4 + setup_score_internal * 2  # max 10
-        score += synergy
+    # --------------------
+    # 5) Synergy bonus
+    # --------------------
+    # setup internal 0–3 ikut memberi bumbu ekstra
+    if (
+        bias_ok
+        and htf_15m_trend_ok
+        and htf_1h_trend_ok
+        and micro_choch_premium
+        and momentum_premium
+    ):
+        score += 10 + setup_score_internal * 2  # max +16
 
-    return int(score)
+    # clamp biar gak lebay
+    return int(min(score, 150))
 
 
 def tier_from_score(score: int) -> str:
     """
     Tier:
-    - A+ : >= 110
-    - A  : 90–109
-    - B  : 70–89
-    - NONE : < 70
+    - A+ : >= 125
+    - A  : 100–124
+    - B  : 80–99
+    - NONE : < 80
     """
-    if score >= 110:
+    if score >= 125:
         return "A+"
-    elif score >= 90:
+    elif score >= 100:
         return "A"
-    elif score >= 70:
+    elif score >= 80:
         return "B"
     else:
         return "NONE"
